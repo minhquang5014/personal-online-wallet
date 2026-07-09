@@ -1,7 +1,10 @@
 import { Ionicons } from '@expo/vector-icons';
+import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { useRouter } from 'expo-router';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
+  Alert,
+  Keyboard,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -12,10 +15,13 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { NumericKeypad } from '../components/NumericKeypad';
 import { colors, font, radius, shadow, spacing } from '../constants/theme';
-import { formatVND } from '../lib/format';
-import { categories } from '../lib/mockData';
+import { formatPickedDate, formatVND } from '../lib/format';
+import { categories, frequentAmounts, suggestCategory } from '../lib/mockData';
 import { TxType } from '../lib/types';
+
+const MAX_DIGITS = 12; // ~ hàng trăm tỉ, quá đủ
 
 export default function AddTransaction() {
   const router = useRouter();
@@ -23,14 +29,66 @@ export default function AddTransaction() {
   const [rawAmount, setRawAmount] = useState('');
   const [categoryId, setCategoryId] = useState<string | null>(null);
   const [note, setNote] = useState('');
+  const [date, setDate] = useState(new Date());
+  const [showDate, setShowDate] = useState(false);
+  const [keypad, setKeypad] = useState(true); // bàn phím số cho ô tiền đang mở?
+  const [autoPicked, setAutoPicked] = useState(false); // danh mục vừa được gợi ý tự động?
 
-  const amount = Number(rawAmount.replace(/\D/g, '')) || 0;
+  const digits = rawAmount.replace(/\D/g, '');
+  const amount = Number(digits) || 0;
   const visibleCategories = useMemo(() => categories.filter((c) => c.type === type), [type]);
+  const freqAmounts = useMemo(() => frequentAmounts(type), [type]);
   const canSave = amount > 0 && !!categoryId;
 
+  // Gợi ý danh mục theo thói quen: đổi số tiền -> nếu có danh mục hay dùng cho đúng số này thì tự chọn.
+  useEffect(() => {
+    const id = suggestCategory(amount, type);
+    if (id) {
+      setCategoryId(id);
+      setAutoPicked(true);
+    }
+  }, [amount, type]);
+
+  function openKeypad() {
+    Keyboard.dismiss(); // đóng bàn phím hệ thống (nếu đang gõ ghi chú)
+    setKeypad(true);
+  }
+
+  function pressDigit(d: string) {
+    if (digits.length >= MAX_DIGITS) return;
+    // Bỏ số 0 dẫn đầu: "0" + "5" -> "5".
+    setRawAmount(digits === '0' ? d : digits + d);
+  }
+
+  function pressTripleZero() {
+    if (!digits || digits === '0') return; // chưa có số thì "000" vô nghĩa
+    setRawAmount((digits + '000').slice(0, MAX_DIGITS));
+  }
+
+  function pressBackspace() {
+    setRawAmount(digits.slice(0, -1));
+  }
+
+  function onChangeDate(event: DateTimePickerEvent, selected?: Date) {
+    setShowDate(false); // Android là dialog: đóng ngay sau khi chọn/hủy
+    if (event.type === 'set' && selected) {
+      // Chỉ lấy ngày/tháng/năm, đặt về đầu ngày.
+      setDate(new Date(selected.getFullYear(), selected.getMonth(), selected.getDate()));
+    }
+  }
+
   function handleSave() {
-    // TODO: khi có Supabase -> insert vào bảng `transactions`.
-    // Hiện chỉ đóng modal để demo luồng UI.
+    if (amount <= 0) {
+      Alert.alert('Thiếu số tiền', 'Nhập số tiền giao dịch trước khi lưu.');
+      return;
+    }
+    if (!categoryId) {
+      Alert.alert('Chưa chọn danh mục', 'Chọn một danh mục cho giao dịch.');
+      return;
+    }
+    const payload = { amount, type, categoryId, note: note.trim(), date: date.toISOString() };
+    // TODO: khi có Supabase -> insert `payload` vào bảng `transactions`.
+    console.log('Giao dịch mới:', payload);
     router.back();
   }
 
@@ -73,24 +131,68 @@ export default function AddTransaction() {
           </View>
 
           {/* Amount */}
-          <View style={styles.amountCard}>
+          <Pressable style={[styles.amountCard, keypad && styles.amountCardActive]} onPress={openKeypad}>
             <Text style={styles.amountLabel}>Số tiền</Text>
             <View style={styles.amountInputRow}>
-              <TextInput
-                style={[styles.amountInput, { color: type === 'income' ? colors.income : colors.expense }]}
-                value={rawAmount ? Number(rawAmount.replace(/\D/g, '')).toLocaleString('vi-VN') : ''}
-                onChangeText={(t) => setRawAmount(t)}
-                keyboardType="number-pad"
-                placeholder="0"
-                placeholderTextColor={colors.textFaint}
-              />
+              <Text
+                style={[
+                  styles.amountInput,
+                  { color: amount > 0 ? (type === 'income' ? colors.income : colors.expense) : colors.textFaint },
+                ]}
+              >
+                {amount > 0 ? amount.toLocaleString('vi-VN') : '0'}
+              </Text>
               <Text style={styles.currency}>₫</Text>
             </View>
             {amount > 0 && <Text style={styles.amountPreview}>{formatVND(amount)}</Text>}
-          </View>
+          </Pressable>
+
+          {/* Gợi ý số tiền hay nhập */}
+          {freqAmounts.length > 0 && (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+              contentContainerStyle={styles.amtChipRow}
+            >
+              {freqAmounts.map((amt) => (
+                <Pressable key={amt} style={styles.amtChip} onPress={() => setRawAmount(String(amt))}>
+                  <Text style={styles.amtChipText}>{amt.toLocaleString('vi-VN')} ₫</Text>
+                </Pressable>
+              ))}
+            </ScrollView>
+          )}
+
+          {/* Date */}
+          <Text style={styles.sectionLabel}>Ngày giao dịch</Text>
+          <Pressable style={styles.dateRow} onPress={() => setShowDate(true)}>
+            <View style={styles.dateLeft}>
+              <Ionicons name="calendar-outline" size={20} color={colors.primary} />
+              <Text style={styles.dateText}>{formatPickedDate(date)}</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={colors.textFaint} />
+          </Pressable>
+
+          {showDate && (
+            <DateTimePicker
+              value={date}
+              mode="date"
+              display={Platform.OS === 'ios' ? 'inline' : 'calendar'}
+              maximumDate={new Date()}
+              onChange={onChangeDate}
+            />
+          )}
 
           {/* Categories */}
-          <Text style={styles.sectionLabel}>Danh mục</Text>
+          <View style={styles.catHeader}>
+            <Text style={styles.sectionLabel}>Danh mục</Text>
+            {autoPicked && !!categoryId && (
+              <View style={styles.autoHint}>
+                <Ionicons name="sparkles" size={12} color={colors.primary} />
+                <Text style={styles.autoHintText}>Gợi ý theo thói quen</Text>
+              </View>
+            )}
+          </View>
           <View style={styles.categoryGrid}>
             {visibleCategories.map((c) => {
               const active = c.id === categoryId;
@@ -98,7 +200,10 @@ export default function AddTransaction() {
                 <Pressable
                   key={c.id}
                   style={[styles.catItem, active && { borderColor: c.color, backgroundColor: c.color + '14' }]}
-                  onPress={() => setCategoryId(c.id)}
+                  onPress={() => {
+                    setCategoryId(c.id);
+                    setAutoPicked(false); // người dùng tự chọn -> bỏ đánh dấu gợi ý
+                  }}
                 >
                   <View style={[styles.catIcon, { backgroundColor: c.color + '22' }]}>
                     <Ionicons name={c.icon as any} size={22} color={c.color} />
@@ -117,6 +222,7 @@ export default function AddTransaction() {
             style={styles.noteInput}
             value={note}
             onChangeText={setNote}
+            onFocus={() => setKeypad(false)}
             placeholder="Thêm mô tả (không bắt buộc)"
             placeholderTextColor={colors.textFaint}
             multiline
@@ -125,12 +231,18 @@ export default function AddTransaction() {
           <View style={{ height: 100 }} />
         </ScrollView>
 
-        {/* Save button */}
+        {/* Bàn phím số (cho ô tiền) + nút Lưu */}
         <View style={styles.footer}>
+          {keypad && (
+            <NumericKeypad
+              onDigit={pressDigit}
+              onTripleZero={pressTripleZero}
+              onBackspace={pressBackspace}
+            />
+          )}
           <Pressable
-            style={[styles.saveBtn, !canSave && styles.saveBtnDisabled]}
+            style={[styles.saveBtn, !canSave && styles.saveBtnDim]}
             onPress={handleSave}
-            disabled={!canSave}
           >
             <Text style={styles.saveText}>Lưu giao dịch</Text>
           </Pressable>
@@ -173,8 +285,11 @@ const styles = StyleSheet.create({
     borderRadius: radius.lg,
     padding: spacing.xl,
     alignItems: 'center',
+    borderWidth: 2,
+    borderColor: 'transparent',
     ...shadow.card,
   },
+  amountCardActive: { borderColor: colors.primary },
   amountLabel: { fontSize: font.size.sm, color: colors.textMuted },
   amountInputRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginTop: spacing.sm },
   amountInput: {
@@ -187,7 +302,45 @@ const styles = StyleSheet.create({
   currency: { fontSize: font.size.xl, color: colors.textMuted, fontWeight: font.weight.semibold },
   amountPreview: { fontSize: font.size.sm, color: colors.textFaint, marginTop: spacing.xs },
 
+  amtChipRow: { gap: spacing.sm, paddingVertical: spacing.xs },
+  amtChip: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.full,
+    backgroundColor: colors.card,
+    borderWidth: 1,
+    borderColor: colors.border,
+    ...shadow.card,
+  },
+  amtChipText: { fontSize: font.size.sm, color: colors.text, fontWeight: font.weight.semibold },
+
+
   sectionLabel: { fontSize: font.size.md, fontWeight: font.weight.semibold, color: colors.text },
+  catHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  autoHint: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    backgroundColor: colors.primarySoft,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: radius.full,
+  },
+  autoHintText: { fontSize: font.size.xs, color: colors.primary, fontWeight: font.weight.semibold },
+
+  dateRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: colors.card,
+    borderRadius: radius.md,
+    paddingVertical: spacing.lg,
+    paddingHorizontal: spacing.lg,
+    ...shadow.card,
+  },
+  dateLeft: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  dateText: { fontSize: font.size.md, color: colors.text, fontWeight: font.weight.medium },
+
   categoryGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: CAT_GAP },
   catItem: {
     // 4 cột: flexBasis ~22% + gap để vừa khít hàng
@@ -233,6 +386,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     ...shadow.card,
   },
-  saveBtnDisabled: { backgroundColor: colors.textFaint, shadowOpacity: 0 },
+  saveBtnDim: { opacity: 0.6 },
   saveText: { color: colors.white, fontSize: font.size.md, fontWeight: font.weight.bold },
 });

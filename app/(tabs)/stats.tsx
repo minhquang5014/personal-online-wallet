@@ -1,14 +1,26 @@
 import { Ionicons } from '@expo/vector-icons';
+import { useMemo, useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { DonutChart } from '../../components/DonutChart';
+import { MonthlyBarChart } from '../../components/MonthlyBarChart';
 import { colors, font, radius, shadow, spacing } from '../../constants/theme';
 import { formatCompactVND, formatVND } from '../../lib/format';
-import { getMonthlySummary, getSpendByCategory } from '../../lib/mockData';
+import { getMonthlySummary, getMonthlyTotals, getSpendByCategory } from '../../lib/mockData';
+
+/** '2026-07' -> 'Tháng 7, 2026'. */
+function monthTitle(key: string): string {
+  const [y, m] = key.split('-');
+  return `Tháng ${Number(m)}, ${y}`;
+}
 
 export default function Stats() {
-  const spend = getSpendByCategory();
-  const summary = getMonthlySummary();
+  const months = useMemo(() => getMonthlyTotals(), []);
+  // Mặc định chọn tháng gần nhất (phần tử cuối vì đã sắp tăng dần).
+  const [selected, setSelected] = useState(() => months[months.length - 1]?.key ?? '');
+
+  const spend = useMemo(() => getSpendByCategory(selected), [selected]);
+  const summary = useMemo(() => getMonthlySummary(selected), [selected]);
   const slices = spend.map((s) => ({ value: s.total, color: s.category.color }));
 
   return (
@@ -18,8 +30,14 @@ export default function Stats() {
           <Text style={styles.title}>Thống kê</Text>
           <View style={styles.monthPill}>
             <Ionicons name="calendar-outline" size={14} color={colors.primary} />
-            <Text style={styles.monthText}>Tháng 7, 2026</Text>
+            <Text style={styles.monthText}>{monthTitle(selected)}</Text>
           </View>
+        </View>
+
+        {/* Biểu đồ thu/chi theo tháng */}
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Thu / chi theo tháng</Text>
+          <MonthlyBarChart data={months} selectedKey={selected} onSelect={setSelected} />
         </View>
 
         {/* Donut */}
@@ -34,17 +52,21 @@ export default function Stats() {
 
         {/* Legend / breakdown */}
         <View style={styles.card}>
-          {spend.map((s, i) => (
-            <View key={s.category.id}>
-              <View style={styles.legendRow}>
-                <View style={[styles.dot, { backgroundColor: s.category.color }]} />
-                <Text style={styles.legendName}>{s.category.name}</Text>
-                <Text style={styles.legendPct}>{Math.round(s.ratio * 100)}%</Text>
-                <Text style={styles.legendAmount}>{formatVND(s.total)}</Text>
+          {spend.length === 0 ? (
+            <Text style={styles.empty}>Chưa có chi tiêu trong tháng này</Text>
+          ) : (
+            spend.map((s, i) => (
+              <View key={s.category.id}>
+                <View style={styles.legendRow}>
+                  <View style={[styles.dot, { backgroundColor: s.category.color }]} />
+                  <Text style={styles.legendName}>{s.category.name}</Text>
+                  <Text style={styles.legendPct}>{Math.round(s.ratio * 100)}%</Text>
+                  <Text style={styles.legendAmount}>{formatVND(s.total)}</Text>
+                </View>
+                {i < spend.length - 1 && <View style={styles.divider} />}
               </View>
-              {i < spend.length - 1 && <View style={styles.divider} />}
-            </View>
-          ))}
+            ))
+          )}
         </View>
 
         {/* Income vs Expense */}
@@ -93,6 +115,8 @@ const styles = StyleSheet.create({
     padding: spacing.lg,
     ...shadow.card,
   },
+  cardTitle: { fontSize: font.size.md, fontWeight: font.weight.bold, color: colors.text, marginBottom: spacing.lg },
+  empty: { fontSize: font.size.sm, color: colors.textMuted, textAlign: 'center', paddingVertical: spacing.lg },
   donutWrap: { alignItems: 'center', paddingVertical: spacing.md },
   donutLabel: { fontSize: font.size.sm, color: colors.textMuted },
   donutValue: { fontSize: font.size.xl, fontWeight: font.weight.bold, color: colors.text },

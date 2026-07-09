@@ -41,6 +41,16 @@ export function formatRelativeDate(iso: string, now: Date = new Date('2026-07-09
   return `${dd}/${mm}`;
 }
 
+const WEEKDAYS_VI = ['Chủ Nhật', 'Thứ Hai', 'Thứ Ba', 'Thứ Tư', 'Thứ Năm', 'Thứ Sáu', 'Thứ Bảy'];
+
+/** Date -> "Thứ Năm, 09/07/2026" cho ô chọn ngày. Tự build để không phụ thuộc locale của Hermes. */
+export function formatPickedDate(d: Date): string {
+  const wd = WEEKDAYS_VI[d.getDay()];
+  const dd = String(d.getDate()).padStart(2, '0');
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  return `${wd}, ${dd}/${mm}/${d.getFullYear()}`;
+}
+
 /** "2026-07-09T04:30:00Z" -> "11:30" (giờ VN, UTC+7). */
 export function formatTime(iso: string): string {
   const d = new Date(iso);
