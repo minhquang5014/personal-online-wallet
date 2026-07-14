@@ -1,6 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import {
   Alert,
@@ -15,39 +14,50 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { DatePickerField } from '../components/DatePickerField';
 import { NumericKeypad } from '../components/NumericKeypad';
 import { colors, font, radius, shadow, spacing } from '../constants/theme';
-import { formatPickedDate, formatVND } from '../lib/format';
-import { categories, frequentAmounts, suggestCategory } from '../lib/mockData';
+import { confirm } from '../lib/confirm';
+import { formatVND } from '../lib/format';
+import { amountSuggestions, suggestCategory } from '../lib/selectors';
 import { TxType } from '../lib/types';
+import { useWallet } from '../lib/WalletContext';
 
 const MAX_DIGITS = 12; // ~ hàng trăm tỉ, quá đủ
 
 export default function AddTransaction() {
   const router = useRouter();
-  const [type, setType] = useState<TxType>('expense');
-  const [rawAmount, setRawAmount] = useState('');
-  const [categoryId, setCategoryId] = useState<string | null>(null);
-  const [note, setNote] = useState('');
-  const [date, setDate] = useState(new Date());
-  const [showDate, setShowDate] = useState(false);
+  const { id } = useLocalSearchParams<{ id?: string }>();
+  const { transactions, categories, addTransaction, updateTransaction, removeTransaction } = useWallet();
+
+  // Chế độ sửa: có `id` và tìm được giao dịch. Đọc 1 lần để khởi tạo state.
+  const editingTx = useMemo(() => (id ? transactions.find((t) => t.id === id) : undefined), [id, transactions]);
+  const editing = !!editingTx;
+
+  const [type, setType] = useState<TxType>(editingTx?.type ?? 'expense');
+  const [rawAmount, setRawAmount] = useState(editingTx ? String(editingTx.amount) : '');
+  const [categoryId, setCategoryId] = useState<string | null>(editingTx?.categoryId ?? null);
+  const [note, setNote] = useState(editingTx?.note ?? '');
+  const [date, setDate] = useState(editingTx ? new Date(editingTx.date) : new Date());
   const [keypad, setKeypad] = useState(true); // bàn phím số cho ô tiền đang mở?
   const [autoPicked, setAutoPicked] = useState(false); // danh mục vừa được gợi ý tự động?
+  const [saving, setSaving] = useState(false);
 
   const digits = rawAmount.replace(/\D/g, '');
   const amount = Number(digits) || 0;
-  const visibleCategories = useMemo(() => categories.filter((c) => c.type === type), [type]);
-  const freqAmounts = useMemo(() => frequentAmounts(type), [type]);
+  const visibleCategories = useMemo(() => categories.filter((c) => c.type === type), [categories, type]);
+  const freqAmounts = useMemo(() => amountSuggestions(transactions, type), [transactions, type]);
   const canSave = amount > 0 && !!categoryId;
 
-  // Gợi ý danh mục theo thói quen: đổi số tiền -> nếu có danh mục hay dùng cho đúng số này thì tự chọn.
+  // Gợi ý danh mục theo thói quen (chỉ khi THÊM mới, không đè danh mục lúc sửa).
   useEffect(() => {
-    const id = suggestCategory(amount, type);
-    if (id) {
-      setCategoryId(id);
+    if (editing) return;
+    const sugg = suggestCategory(transactions, amount, type);
+    if (sugg) {
+      setCategoryId(sugg);
       setAutoPicked(true);
     }
-  }, [amount, type]);
+  }, [editing, transactions, amount, type]);
 
   function openKeypad() {
     Keyboard.dismiss(); // đóng bàn phím hệ thống (nếu đang gõ ghi chú)
@@ -69,15 +79,7 @@ export default function AddTransaction() {
     setRawAmount(digits.slice(0, -1));
   }
 
-  function onChangeDate(event: DateTimePickerEvent, selected?: Date) {
-    setShowDate(false); // Android là dialog: đóng ngay sau khi chọn/hủy
-    if (event.type === 'set' && selected) {
-      // Chỉ lấy ngày/tháng/năm, đặt về đầu ngày.
-      setDate(new Date(selected.getFullYear(), selected.getMonth(), selected.getDate()));
-    }
-  }
-
-  function handleSave() {
+  async function handleSave() {
     if (amount <= 0) {
       Alert.alert('Thiếu số tiền', 'Nhập số tiền giao dịch trước khi lưu.');
       return;
@@ -86,10 +88,43 @@ export default function AddTransaction() {
       Alert.alert('Chưa chọn danh mục', 'Chọn một danh mục cho giao dịch.');
       return;
     }
-    const payload = { amount, type, categoryId, note: note.trim(), date: date.toISOString() };
-    // TODO: khi có Supabase -> insert `payload` vào bảng `transactions`.
-    console.log('Giao dịch mới:', payload);
-    router.back();
+
+    setSaving(true);
+    try {
+      // Date picker trả về 00:00 của ngày đã chọn. Nếu là hôm nay thì lấy giờ
+      // hiện tại, để danh sách giao dịch không hiện "00:00" cho mọi dòng.
+      // Khi sửa, giữ nguyên giờ gốc nếu ngày không đổi.
+      let when: Date;
+      if (editing && date.toDateString() === new Date(editingTx!.date).toDateString()) {
+        when = new Date(editingTx!.date);
+      } else if (date.toDateString() === new Date().toDateString()) {
+        when = new Date();
+      } else {
+        when = date;
+      }
+
+      const payload = { amount, type, categoryId, note: note.trim(), date: when.toISOString() };
+      if (editing) await updateTransaction(editingTx!.id, payload);
+      else await addTransaction(payload); // `createdBy` do server gán = người đăng nhập
+      router.back();
+    } catch (e: any) {
+      Alert.alert(editing ? 'Sửa thất bại' : 'Lưu thất bại', e?.message ?? String(e));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleDelete() {
+    if (!editingTx) return;
+    if (!(await confirm('Xoá giao dịch', 'Xoá giao dịch này? Không thể hoàn tác.', 'Xoá'))) return;
+    setSaving(true);
+    try {
+      await removeTransaction(editingTx.id);
+      router.back();
+    } catch (e: any) {
+      Alert.alert('Xoá thất bại', e?.message ?? String(e));
+      setSaving(false);
+    }
   }
 
   return (
@@ -103,8 +138,14 @@ export default function AddTransaction() {
           <Pressable onPress={() => router.back()} hitSlop={12}>
             <Ionicons name="close" size={26} color={colors.text} />
           </Pressable>
-          <Text style={styles.headerTitle}>Thêm giao dịch</Text>
-          <View style={{ width: 26 }} />
+          <Text style={styles.headerTitle}>{editing ? 'Sửa giao dịch' : 'Thêm giao dịch'}</Text>
+          {editing ? (
+            <Pressable onPress={handleDelete} hitSlop={12} disabled={saving}>
+              <Ionicons name="trash-outline" size={24} color={colors.expense} />
+            </Pressable>
+          ) : (
+            <View style={{ width: 26 }} />
+          )}
         </View>
 
         <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
@@ -147,41 +188,9 @@ export default function AddTransaction() {
             {amount > 0 && <Text style={styles.amountPreview}>{formatVND(amount)}</Text>}
           </Pressable>
 
-          {/* Gợi ý số tiền hay nhập */}
-          {freqAmounts.length > 0 && (
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              keyboardShouldPersistTaps="handled"
-              contentContainerStyle={styles.amtChipRow}
-            >
-              {freqAmounts.map((amt) => (
-                <Pressable key={amt} style={styles.amtChip} onPress={() => setRawAmount(String(amt))}>
-                  <Text style={styles.amtChipText}>{amt.toLocaleString('vi-VN')} ₫</Text>
-                </Pressable>
-              ))}
-            </ScrollView>
-          )}
-
           {/* Date */}
           <Text style={styles.sectionLabel}>Ngày giao dịch</Text>
-          <Pressable style={styles.dateRow} onPress={() => setShowDate(true)}>
-            <View style={styles.dateLeft}>
-              <Ionicons name="calendar-outline" size={20} color={colors.primary} />
-              <Text style={styles.dateText}>{formatPickedDate(date)}</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={18} color={colors.textFaint} />
-          </Pressable>
-
-          {showDate && (
-            <DateTimePicker
-              value={date}
-              mode="date"
-              display={Platform.OS === 'ios' ? 'inline' : 'calendar'}
-              maximumDate={new Date()}
-              onChange={onChangeDate}
-            />
-          )}
+          <DatePickerField value={date} onChange={setDate} maximumDate={new Date()} />
 
           {/* Categories */}
           <View style={styles.catHeader}>
@@ -231,8 +240,22 @@ export default function AddTransaction() {
           <View style={{ height: 100 }} />
         </ScrollView>
 
-        {/* Bàn phím số (cho ô tiền) + nút Lưu */}
+        {/* Gợi ý số tiền + bàn phím số (cho ô tiền) + nút Lưu */}
         <View style={styles.footer}>
+          {keypad && freqAmounts.length > 0 && (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+              contentContainerStyle={styles.amtChipRow}
+            >
+              {freqAmounts.map((amt) => (
+                <Pressable key={amt} style={styles.amtChip} onPress={() => setRawAmount(String(amt))}>
+                  <Text style={styles.amtChipText}>{amt.toLocaleString('vi-VN')} ₫</Text>
+                </Pressable>
+              ))}
+            </ScrollView>
+          )}
           {keypad && (
             <NumericKeypad
               onDigit={pressDigit}
@@ -241,10 +264,13 @@ export default function AddTransaction() {
             />
           )}
           <Pressable
-            style={[styles.saveBtn, !canSave && styles.saveBtnDim]}
+            style={[styles.saveBtn, (!canSave || saving) && styles.saveBtnDim]}
             onPress={handleSave}
+            disabled={saving}
           >
-            <Text style={styles.saveText}>Lưu giao dịch</Text>
+            <Text style={styles.saveText}>
+              {saving ? 'Đang lưu…' : editing ? 'Cập nhật' : 'Lưu giao dịch'}
+            </Text>
           </Pressable>
         </View>
       </KeyboardAvoidingView>
@@ -302,7 +328,7 @@ const styles = StyleSheet.create({
   currency: { fontSize: font.size.xl, color: colors.textMuted, fontWeight: font.weight.semibold },
   amountPreview: { fontSize: font.size.sm, color: colors.textFaint, marginTop: spacing.xs },
 
-  amtChipRow: { gap: spacing.sm, paddingVertical: spacing.xs },
+  amtChipRow: { gap: spacing.sm, paddingBottom: spacing.md },
   amtChip: {
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
@@ -328,18 +354,6 @@ const styles = StyleSheet.create({
   },
   autoHintText: { fontSize: font.size.xs, color: colors.primary, fontWeight: font.weight.semibold },
 
-  dateRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: colors.card,
-    borderRadius: radius.md,
-    paddingVertical: spacing.lg,
-    paddingHorizontal: spacing.lg,
-    ...shadow.card,
-  },
-  dateLeft: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
-  dateText: { fontSize: font.size.md, color: colors.text, fontWeight: font.weight.medium },
 
   categoryGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: CAT_GAP },
   catItem: {

@@ -90,7 +90,7 @@ insert into public.categories (user_id, name, icon, color, type) values
   (null, 'Di chuyển',  'car',              '#0EA5E9', 'expense'),
   (null, 'Mua sắm',    'bag-handle',       '#EC4899', 'expense'),
   (null, 'Hóa đơn',    'receipt',          '#8B5CF6', 'expense'),
-  (null, 'Cà phê',     'cafe',             '#A16207', 'expense'),
+  (null, 'Thể thao',   'basketball',       '#A16207', 'expense'),
   (null, 'Sức khỏe',   'medkit',           '#EF4444', 'expense'),
   (null, 'Giải trí',   'game-controller',  '#14B8A6', 'expense'),
   (null, 'Lương',      'cash',             '#16A34A', 'income'),

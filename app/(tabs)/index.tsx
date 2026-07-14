@@ -1,16 +1,46 @@
 import { Ionicons } from '@expo/vector-icons';
-import { Link } from 'expo-router';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Link, useRouter } from 'expo-router';
+import { useMemo, useState } from 'react';
+import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { MonthDropdown } from '../../components/MonthDropdown';
 import { TransactionRow } from '../../components/TransactionRow';
 import { colors, font, radius, shadow, spacing } from '../../constants/theme';
+import { useAuth } from '../../lib/AuthContext';
 import { formatVND } from '../../lib/format';
-import { getMonthlySummary, getSpendByCategory, getTransactionsWithCategory } from '../../lib/mockData';
+import { monthKeyOf, monthlySummary, spendByCategory } from '../../lib/selectors';
+import { TransactionWithCategory } from '../../lib/types';
+import { useWallet } from '../../lib/WalletContext';
+
+/** 'YYYY' của một ISO date, theo giờ địa phương. */
+const yearOf = (iso: string) => monthKeyOf(iso).slice(0, 4);
 
 export default function Dashboard() {
-  const summary = getMonthlySummary();
-  const recent = getTransactionsWithCategory().slice(0, 5);
-  const topSpend = getSpendByCategory().slice(0, 3);
+  const router = useRouter();
+  const { transactions, members, wallet, canEdit } = useWallet();
+  const { userId } = useAuth();
+  const myName = members.find((m) => m.id === userId)?.name ?? '';
+
+  function openTx(tx: TransactionWithCategory) {
+    if (canEdit(tx)) router.push(`/add?id=${tx.id}`);
+    else Alert.alert('Không sửa được', 'Chỉ người nhập hoặc chủ ví mới sửa/xoá giao dịch này.');
+  }
+
+  // Tổng quan xem theo NĂM. Mặc định năm hiện tại; đổi bằng ô chọn ở góc phải.
+  const currentYear = String(new Date().getFullYear());
+  const [pickedYear, setPickedYear] = useState('');
+  const year = pickedYear || currentYear;
+
+  const yearOptions = useMemo(() => {
+    const set = new Set(transactions.map((t) => yearOf(t.date)));
+    set.add(currentYear);
+    return [...set].sort().reverse();
+  }, [transactions, currentYear]);
+
+  const yearTxs = useMemo(() => transactions.filter((t) => yearOf(t.date) === year), [transactions, year]);
+  const summary = useMemo(() => monthlySummary(yearTxs), [yearTxs]);
+  const recent = yearTxs.slice(0, 5);
+  const topSpend = useMemo(() => spendByCategory(yearTxs).slice(0, 3), [yearTxs]);
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
@@ -18,17 +48,27 @@ export default function Dashboard() {
         {/* Header */}
         <View style={styles.header}>
           <View>
-            <Text style={styles.hello}>Xin chào 👋</Text>
-            <Text style={styles.name}>Quang</Text>
+            <Text style={styles.hello}>{wallet?.name ?? 'Xin chào 👋'}</Text>
+            <Text style={styles.name}>{myName}</Text>
           </View>
-          <View style={styles.avatar}>
-            <Ionicons name="person" size={20} color={colors.primary} />
-          </View>
+          <MonthDropdown
+            value={year}
+            options={yearOptions}
+            onChange={setPickedYear}
+            title="Chọn năm"
+            renderLabel={(y) => `Năm ${y}`}
+          >
+            <View style={styles.yearPill}>
+              <Ionicons name="calendar-outline" size={15} color={colors.primary} />
+              <Text style={styles.yearText}>{year}</Text>
+              <Ionicons name="chevron-down" size={15} color={colors.primary} />
+            </View>
+          </MonthDropdown>
         </View>
 
         {/* Balance card */}
         <View style={styles.balanceCard}>
-          <Text style={styles.balanceLabel}>Số dư tháng này</Text>
+          <Text style={styles.balanceLabel}>Số dư năm {year}</Text>
           <Text style={styles.balanceValue}>{formatVND(summary.balance)}</Text>
 
           <View style={styles.balanceRow}>
@@ -37,7 +77,7 @@ export default function Dashboard() {
                 <Ionicons name="arrow-down" size={16} color={colors.white} />
               </View>
               <View>
-                <Text style={styles.pillLabel}>Thu nhập</Text>
+                <Text style={styles.pillLabel}>Tổng thu</Text>
                 <Text style={styles.pillValue}>{formatVND(summary.income)}</Text>
               </View>
             </View>
@@ -46,7 +86,7 @@ export default function Dashboard() {
                 <Ionicons name="arrow-up" size={16} color={colors.white} />
               </View>
               <View>
-                <Text style={styles.pillLabel}>Chi tiêu</Text>
+                <Text style={styles.pillLabel}>Tổng chi</Text>
                 <Text style={styles.pillValue}>{formatVND(summary.expense)}</Text>
               </View>
             </View>
@@ -58,6 +98,7 @@ export default function Dashboard() {
           <Text style={styles.sectionTitle}>Chi nhiều nhất</Text>
         </View>
         <View style={styles.card}>
+          {topSpend.length === 0 && <Text style={styles.emptyText}>Chưa có chi tiêu nào</Text>}
           {topSpend.map((s, i) => (
             <View key={s.category.id}>
               <View style={styles.spendRow}>
@@ -89,9 +130,12 @@ export default function Dashboard() {
           </Link>
         </View>
         <View style={styles.card}>
+          {recent.length === 0 && <Text style={styles.emptyText}>Chưa có giao dịch trong năm này</Text>}
           {recent.map((tx, i) => (
             <View key={tx.id}>
-              <TransactionRow tx={tx} />
+              <Pressable onPress={() => openTx(tx)} android_ripple={{ color: colors.border }}>
+                <TransactionRow tx={tx} />
+              </Pressable>
               {i < recent.length - 1 && <View style={styles.divider} />}
             </View>
           ))}
@@ -113,14 +157,16 @@ const styles = StyleSheet.create({
   },
   hello: { fontSize: font.size.sm, color: colors.textMuted },
   name: { fontSize: font.size.xl, fontWeight: font.weight.bold, color: colors.text },
-  avatar: {
-    width: 44,
-    height: 44,
-    borderRadius: radius.full,
-    backgroundColor: colors.primarySoft,
+  yearPill: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    gap: spacing.xs,
+    backgroundColor: colors.primarySoft,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.full,
   },
+  yearText: { fontSize: font.size.sm, fontWeight: font.weight.bold, color: colors.primary },
 
   balanceCard: {
     backgroundColor: colors.primary,
@@ -168,6 +214,12 @@ const styles = StyleSheet.create({
     ...shadow.card,
   },
   divider: { height: 1, backgroundColor: colors.border },
+  emptyText: {
+    fontSize: font.size.sm,
+    color: colors.textMuted,
+    textAlign: 'center',
+    paddingVertical: spacing.lg,
+  },
 
   spendRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingVertical: spacing.md },
   spendIcon: {

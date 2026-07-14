@@ -28,8 +28,26 @@ function trim(v: number): string {
     .replace('.', ',');
 }
 
+/**
+ * ISO -> 'YYYY-MM' theo GIỜ ĐỊA PHƯƠNG.
+ *
+ * Không được cắt chuỗi ISO (`iso.slice(0,7)`): ISO là giờ UTC, mà giao dịch
+ * lưu lúc 00:00 giờ VN sẽ thành 17:00 hôm trước theo UTC. Giao dịch ngày mùng 1
+ * sẽ bị xếp nhầm vào tháng trước.
+ */
+export function monthKey(iso: string): string {
+  const d = new Date(iso);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+
+/** ISO -> 'YYYY-MM-DD' theo giờ địa phương (cùng lý do như trên). */
+export function dayKey(iso: string): string {
+  const d = new Date(iso);
+  return `${monthKey(iso)}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
 /** "2026-07-09T04:30:00Z" -> "Hôm nay", "Hôm qua", hoặc "09/07". */
-export function formatRelativeDate(iso: string, now: Date = new Date('2026-07-09T12:00:00Z')): string {
+export function formatRelativeDate(iso: string, now: Date = new Date()): string {
   const d = new Date(iso);
   const startOf = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
   const diffDays = Math.round((startOf(now) - startOf(d)) / 86_400_000);
@@ -49,6 +67,16 @@ export function formatPickedDate(d: Date): string {
   const dd = String(d.getDate()).padStart(2, '0');
   const mm = String(d.getMonth() + 1).padStart(2, '0');
   return `${wd}, ${dd}/${mm}/${d.getFullYear()}`;
+}
+
+/** Tách tiêu đề theo ngày cho danh sách giao dịch: '08', 'Thứ Tư', 'tháng 7 2026'. */
+export function dayHeaderParts(iso: string): { day: string; weekday: string; monthYear: string } {
+  const d = new Date(iso);
+  return {
+    day: String(d.getDate()).padStart(2, '0'),
+    weekday: WEEKDAYS_VI[d.getDay()],
+    monthYear: `tháng ${d.getMonth() + 1} ${d.getFullYear()}`,
+  };
 }
 
 /** "2026-07-09T04:30:00Z" -> "11:30" (giờ VN, UTC+7). */

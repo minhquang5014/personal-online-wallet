@@ -1,12 +1,20 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SecureStore from 'expo-secure-store';
+import { Platform } from 'react-native';
 
 /**
- * Adapter lưu session Supabase vào expo-secure-store (Keychain/Keystore).
+ * Kho lưu key-value dùng chung (session Supabase, tuỳ chọn, token Google).
  *
- * SecureStore giới hạn ~2KB mỗi value, trong khi session Supabase (kèm refresh
- * token) có thể lớn hơn. Adapter này tự cắt value thành nhiều mảnh nhỏ và ghép
- * lại khi đọc, nên không bị giới hạn kích thước.
+ * expo-secure-store KHÔNG có bản cài cho web — module vẫn import được nhưng
+ * các hàm là undefined, gọi vào sẽ văng
+ * "ExpoSecureStore.default.getValueWithKeyAsync is not a function".
+ * Nên trên web ta dùng AsyncStorage (chạy trên localStorage).
+ *
+ * Trên native dùng SecureStore (Keychain/Keystore). SecureStore giới hạn ~2KB
+ * mỗi value, mà session Supabase kèm refresh token có thể lớn hơn, nên value
+ * dài được cắt thành nhiều mảnh và ghép lại khi đọc.
  */
+const isWeb = Platform.OS === 'web';
 const CHUNK_SIZE = 1800;
 
 async function getChunkCount(key: string): Promise<number> {
@@ -14,11 +22,11 @@ async function getChunkCount(key: string): Promise<number> {
   return meta ? parseInt(meta, 10) : 0;
 }
 
-const adapter = {
+const nativeAdapter = {
   async getItem(key: string): Promise<string | null> {
     const count = await getChunkCount(key);
     if (count === 0) {
-      // Trường hợp value ngắn được lưu trực tiếp (không chia mảnh)
+      // Value ngắn được lưu trực tiếp (không chia mảnh)
       return SecureStore.getItemAsync(key);
     }
     const parts: string[] = [];
@@ -31,8 +39,7 @@ const adapter = {
   },
 
   async setItem(key: string, value: string): Promise<void> {
-    // Dọn mảnh cũ trước khi ghi mới
-    await adapter.removeItem(key);
+    await nativeAdapter.removeItem(key); // dọn mảnh cũ trước khi ghi mới
 
     if (value.length <= CHUNK_SIZE) {
       await SecureStore.setItemAsync(key, value);
@@ -41,8 +48,7 @@ const adapter = {
     const count = Math.ceil(value.length / CHUNK_SIZE);
     await SecureStore.setItemAsync(`${key}__count`, String(count));
     for (let i = 0; i < count; i++) {
-      const slice = value.slice(i * CHUNK_SIZE, (i + 1) * CHUNK_SIZE);
-      await SecureStore.setItemAsync(`${key}__${i}`, slice);
+      await SecureStore.setItemAsync(`${key}__${i}`, value.slice(i * CHUNK_SIZE, (i + 1) * CHUNK_SIZE));
     }
   },
 
@@ -55,5 +61,13 @@ const adapter = {
     }
   },
 };
+
+const webAdapter = {
+  getItem: (key: string) => AsyncStorage.getItem(key),
+  setItem: (key: string, value: string) => AsyncStorage.setItem(key, value),
+  removeItem: (key: string) => AsyncStorage.removeItem(key),
+};
+
+const adapter = isWeb ? webAdapter : nativeAdapter;
 
 export default adapter;
