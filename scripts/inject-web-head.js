@@ -33,16 +33,47 @@ html = html.replace(
   'content="width=device-width, initial-scale=1, shrink-to-fit=no, viewport-fit=cover"'
 );
 
+// URL Supabase để preconnect (bắt tay DNS/TLS sớm cho lần gọi API đầu tiên).
+// Node không tự nạp .env như expo -> đọc tay nếu có.
+function readEnv(key) {
+  if (process.env[key]) return process.env[key];
+  const envPath = path.resolve(__dirname, '..', '.env');
+  if (!fs.existsSync(envPath)) return '';
+  const line = fs
+    .readFileSync(envPath, 'utf8')
+    .split('\n')
+    .find((l) => l.trim().startsWith(key + '='));
+  return line ? line.slice(line.indexOf('=') + 1).trim() : '';
+}
+const supabaseUrl = readEnv('EXPO_PUBLIC_SUPABASE_URL').replace(/\/+$/, '');
+
 const tags = [
   '<link rel="apple-touch-icon" href="/apple-touch-icon.png" />',
   '<meta name="apple-mobile-web-app-capable" content="yes" />',
   '<meta name="apple-mobile-web-app-status-bar-style" content="default" />',
   '<meta name="apple-mobile-web-app-title" content="Chi tiêu" />',
   '<meta name="mobile-web-app-capable" content="yes" />',
-  '<meta name="theme-color" content="#ffffff" />',
-].join('\n  ');
+  '<meta name="theme-color" content="#F4F6FA" />',
+  supabaseUrl ? `<link rel="preconnect" href="${supabaseUrl}" crossorigin />` : '',
+  // Spinner hiện NGAY (trước khi tải xong ~650KB JS) để hết cảnh trắng trang.
+  // React mount vào #root sẽ tự thay thế nội dung này.
+  `<style>
+    html,body{background:#F4F6FA}
+    #app-loading{position:fixed;inset:0;display:flex;align-items:center;justify-content:center}
+    #app-loading .spin{width:38px;height:38px;border:4px solid #E8F0FE;border-top-color:#2E6BE6;border-radius:50%;animation:app-spin .8s linear infinite}
+    @keyframes app-spin{to{transform:rotate(360deg)}}
+  </style>`,
+]
+  .filter(Boolean)
+  .join('\n  ');
 
 html = html.replace('</head>', `  ${tags}\n</head>`);
 
+// Chèn spinner vào #root.
+html = html.replace(
+  '<div id="root"></div>',
+  '<div id="root"><div id="app-loading"><div class="spin"></div></div></div>'
+);
+
 fs.writeFileSync(file, html);
-console.log('Đã chèn apple-touch-icon + meta toàn màn hình vào dist/index.html.');
+console.log('Đã chèn apple-touch-icon + meta + spinner + preconnect vào dist/index.html.');
