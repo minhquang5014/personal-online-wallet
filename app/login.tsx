@@ -1,7 +1,7 @@
-import { Ionicons } from '@expo/vector-icons';
 import { useState } from 'react';
 import {
   Alert,
+  Image,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -67,9 +67,8 @@ export default function Login() {
     <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
-          <View style={styles.logo}>
-            <Ionicons name="wallet" size={40} color={colors.primary} />
-          </View>
+          <Image source={require('../assets/logo-app.jpg')} style={styles.logo} resizeMode="cover" />
+
           <Text style={styles.title}>Quản lý chi tiêu</Text>
           <Text style={styles.subtitle}>
             {isSignup ? 'Tạo tài khoản để bắt đầu' : 'Đăng nhập để tiếp tục'}
@@ -137,9 +136,6 @@ const styles = StyleSheet.create({
     width: 80,
     height: 80,
     borderRadius: radius.xl,
-    backgroundColor: colors.primarySoft,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   title: {
     fontSize: font.size.xxl,
