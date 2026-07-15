@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "Quản lý chi tiêu",
-    "slug": "personal-finance-management",
+    "slug": "chi-tieu-gia-dinh",
     "version": "1.0.0",
     "scheme": "pfm",
     "orientation": "portrait",
@@ -32,7 +32,7 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "55c923d4-90da-4758-8577-3f7f66661a50"
+        "projectId": "9267cd39-ecda-4646-9eff-24a4d598501f"
       }
     },
     "owner": "d25m12"
