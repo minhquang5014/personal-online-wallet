@@ -27,7 +27,6 @@ export default function Settings() {
   const me = members.find((m) => m.id === userId);
 
   const accountItems: Item[] = [
-    { icon: 'person-circle', label: 'Hồ sơ', color: colors.primary, route: '/profile' },
     { icon: 'download-outline', label: 'Xuất file CSV', color: '#0EA5E9', route: '/export' },
     {
       icon: 'wallet',
@@ -125,7 +124,7 @@ export default function Settings() {
           </View>
         </View>
 
-        <Text style={styles.version}>Phiên bản 1.0{'\n'}Design by Phuc</Text>
+        <Text style={styles.version}>Phiên bản 1.0{'\n'}Design by bố Cá</Text>
         <View style={{ height: spacing.xxl }} />
       </ScrollView>
     </SafeAreaView>

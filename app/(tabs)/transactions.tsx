@@ -48,7 +48,7 @@ export default function Transactions() {
   const monthOptions = useMemo(() => {
     const set = new Set(all.map((t) => monthKeyOf(t.date)));
     set.add(currentMonth);
-    return [...[...set].sort().reverse(), ALL_MONTHS];
+    return [ALL_MONTHS, ...[...set].sort().reverse()];
   }, [all, currentMonth]);
 
   function openTx(tx: TransactionWithCategory) {
@@ -92,7 +92,7 @@ export default function Transactions() {
     <SafeAreaView style={styles.safe} edges={['top']}>
       <View style={styles.header}>
         <Text style={styles.title}>Giao dịch</Text>
-        <MonthDropdown value={selected} options={monthOptions} onChange={setPicked}>
+        <MonthDropdown value={selected} options={monthOptions} onChange={setPicked} maxVisible={5}>
           <View style={styles.monthPill}>
             <Ionicons name="calendar-outline" size={14} color={colors.primary} />
             <Text style={styles.monthText}>{monthTitle(selected)}</Text>

@@ -36,7 +36,7 @@ export default function Stats() {
   const monthOptions = useMemo(() => {
     const set = new Set(transactions.map((t) => monthKeyOf(t.date)));
     set.add(currentMonth);
-    return [...[...set].sort().reverse(), ALL_MONTHS];
+    return [ALL_MONTHS, ...[...set].sort().reverse()];
   }, [transactions, currentMonth]);
 
   const [chartTab, setChartTab] = useState<TxType>('expense'); // tab báo cáo: Chi / Thu
@@ -58,7 +58,7 @@ export default function Stats() {
       <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
         <View style={styles.header}>
           <Text style={styles.title}>Thống kê</Text>
-          <MonthDropdown value={selected} options={monthOptions} onChange={setSelected}>
+          <MonthDropdown value={selected} options={monthOptions} onChange={setSelected} maxVisible={5}>
             <View style={styles.monthPill}>
               <Ionicons name="calendar-outline" size={14} color={colors.primary} />
               <Text style={styles.monthText}>{monthTitle(selected)}</Text>

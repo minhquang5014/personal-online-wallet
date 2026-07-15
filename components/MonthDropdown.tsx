@@ -6,6 +6,9 @@ import { colors, font, radius, shadow, spacing } from '../constants/theme';
 /** Giá trị đặc biệt: xem toàn bộ các tháng. */
 export const ALL_MONTHS = 'all';
 
+/** Chiều cao mỗi dòng trong danh sách (dùng để tính số dòng hiển thị). */
+const ROW_HEIGHT = 48;
+
 /** '2026-07' -> 'Tháng 7, 2026'; ALL_MONTHS -> 'Tất cả'. */
 function label(key: string): string {
   if (key === ALL_MONTHS) return 'Tất cả';
@@ -24,6 +27,7 @@ export function MonthDropdown({
   children,
   title = 'Chọn tháng',
   renderLabel = label,
+  maxVisible,
 }: {
   value: string;
   options: string[];
@@ -31,8 +35,12 @@ export function MonthDropdown({
   children: ReactNode;
   title?: string;
   renderLabel?: (key: string) => string;
+  /** Số dòng hiển thị trước khi phải cuộn (mặc định ~6.6 dòng). */
+  maxVisible?: number;
 }) {
   const [open, setOpen] = useState(false);
+  // Chừa nửa dòng để lộ dòng kế tiếp -> gợi ý còn cuộn được.
+  const maxHeight = maxVisible ? maxVisible * ROW_HEIGHT + ROW_HEIGHT / 2 : 320;
 
   return (
     <>
@@ -44,7 +52,7 @@ export function MonthDropdown({
         <Pressable style={styles.backdrop} onPress={() => setOpen(false)}>
           <Pressable style={styles.sheet} onPress={() => {}}>
             <Text style={styles.title}>{title}</Text>
-            <ScrollView style={{ maxHeight: 320 }} showsVerticalScrollIndicator={false}>
+            <ScrollView style={{ maxHeight }} showsVerticalScrollIndicator>
               {options.map((opt) => {
                 const active = opt === value;
                 return (
@@ -93,10 +101,10 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
   },
   row: {
+    height: ROW_HEIGHT,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: spacing.md,
     paddingHorizontal: spacing.sm,
     borderRadius: radius.md,
   },
