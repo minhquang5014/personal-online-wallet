@@ -1,13 +1,12 @@
 import { Ionicons } from '@expo/vector-icons';
-import { File, Paths } from 'expo-file-system';
 import { useRouter } from 'expo-router';
-import * as Sharing from 'expo-sharing';
 import { useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors, font, radius, shadow, spacing } from '../constants/theme';
 import { buildCsv } from '../lib/csv';
 import { dayKey } from '../lib/format';
+import { saveCsv } from '../lib/saveCsv';
 import { useWallet } from '../lib/WalletContext';
 
 export default function ExportScreen() {
@@ -24,20 +23,7 @@ export default function ExportScreen() {
     try {
       const csv = buildCsv(transactions);
       const name = `giao-dich-${dayKey(new Date().toISOString())}.csv`;
-
-      const file = new File(Paths.cache, name);
-      file.create({ overwrite: true }); // ghi đè nếu hôm nay đã xuất một lần
-      file.write(csv);
-
-      if (!(await Sharing.isAvailableAsync())) {
-        Alert.alert('Không chia sẻ được', 'Thiết bị không hỗ trợ chia sẻ file. File đã lưu ở bộ nhớ tạm.');
-        return;
-      }
-      await Sharing.shareAsync(file.uri, {
-        mimeType: 'text/csv',
-        dialogTitle: 'Xuất giao dịch (CSV)',
-        UTI: 'public.comma-separated-values-text',
-      });
+      await saveCsv(name, csv);
     } catch (e: any) {
       Alert.alert('Xuất thất bại', e?.message ?? String(e));
     } finally {
