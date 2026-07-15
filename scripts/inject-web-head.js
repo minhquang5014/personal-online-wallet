@@ -47,6 +47,22 @@ function readEnv(key) {
 }
 const supabaseUrl = readEnv('EXPO_PUBLIC_SUPABASE_URL').replace(/\/+$/, '');
 
+// Tìm font Ionicons trong dist để preload (tải song song với JS thay vì đợi JS
+// chạy xong mới xin font -> icon hiện sớm hơn, đỡ khựng lúc vào app).
+function findIoniconsFont() {
+  const dir = path.resolve(
+    __dirname,
+    '..',
+    'dist/assets/node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts'
+  );
+  if (!fs.existsSync(dir)) return '';
+  const f = fs.readdirSync(dir).find((n) => n.startsWith('Ionicons') && n.endsWith('.ttf'));
+  return f
+    ? '/assets/node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/' + f
+    : '';
+}
+const ioniconsFont = findIoniconsFont();
+
 const tags = [
   '<link rel="apple-touch-icon" href="/apple-touch-icon.png" />',
   '<meta name="apple-mobile-web-app-capable" content="yes" />',
@@ -55,6 +71,9 @@ const tags = [
   '<meta name="mobile-web-app-capable" content="yes" />',
   '<meta name="theme-color" content="#F4F6FA" />',
   supabaseUrl ? `<link rel="preconnect" href="${supabaseUrl}" crossorigin />` : '',
+  ioniconsFont
+    ? `<link rel="preload" as="font" type="font/ttf" crossorigin href="${ioniconsFont}" />`
+    : '',
   // Logo hiện NGAY (trước khi tải xong ~650KB JS) để hết cảnh trắng trang.
   // React mount vào #root sẽ tự thay thế nội dung này.
   `<style>
