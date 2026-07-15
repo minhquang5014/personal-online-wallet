@@ -1,7 +1,7 @@
 import { Stack, useRootNavigationState, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
-import { ActivityIndicator, AppState, LogBox, View } from 'react-native';
+import { ActivityIndicator, AppState, Image, LogBox, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { colors } from '../constants/theme';
@@ -40,6 +40,28 @@ function ReminderSync() {
   return null;
 }
 
+/** Màn hình chờ chung: logo app + spinner nhỏ. Dùng khi khởi động/đăng nhập. */
+function BrandLoading() {
+  return (
+    <View
+      style={{
+        flex: 1,
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: colors.background,
+        gap: 20,
+      }}
+    >
+      <Image
+        source={require('../assets/logo-app.jpg')}
+        style={{ width: 96, height: 96, borderRadius: 22 }}
+        resizeMode="cover"
+      />
+      <ActivityIndicator color={colors.primary} />
+    </View>
+  );
+}
+
 /**
  * Điều hướng theo trạng thái:
  *   chưa đăng nhập      -> /login
@@ -74,13 +96,7 @@ function RootNavigator() {
     }
   }, [navState?.key, booting, session, wallet, segments, router]);
 
-  if (booting) {
-    return (
-      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.background }}>
-        <ActivityIndicator size="large" color={colors.primary} />
-      </View>
-    );
-  }
+  if (booting) return <BrandLoading />;
 
   return (
     <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.background } }}>

@@ -55,13 +55,13 @@ const tags = [
   '<meta name="mobile-web-app-capable" content="yes" />',
   '<meta name="theme-color" content="#F4F6FA" />',
   supabaseUrl ? `<link rel="preconnect" href="${supabaseUrl}" crossorigin />` : '',
-  // Spinner hiện NGAY (trước khi tải xong ~650KB JS) để hết cảnh trắng trang.
+  // Logo hiện NGAY (trước khi tải xong ~650KB JS) để hết cảnh trắng trang.
   // React mount vào #root sẽ tự thay thế nội dung này.
   `<style>
     html,body{background:#F4F6FA}
-    #app-loading{position:fixed;inset:0;display:flex;align-items:center;justify-content:center}
-    #app-loading .spin{width:38px;height:38px;border:4px solid #E8F0FE;border-top-color:#2E6BE6;border-radius:50%;animation:app-spin .8s linear infinite}
-    @keyframes app-spin{to{transform:rotate(360deg)}}
+    #app-loading{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:#F4F6FA}
+    #app-loading img{width:96px;height:96px;border-radius:22px;animation:app-pulse 1.2s ease-in-out infinite}
+    @keyframes app-pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.55;transform:scale(.94)}}
   </style>`,
 ]
   .filter(Boolean)
@@ -69,11 +69,11 @@ const tags = [
 
 html = html.replace('</head>', `  ${tags}\n</head>`);
 
-// Chèn spinner vào #root.
+// Chèn logo chờ vào #root.
 html = html.replace(
   '<div id="root"></div>',
-  '<div id="root"><div id="app-loading"><div class="spin"></div></div></div>'
+  '<div id="root"><div id="app-loading"><img src="/apple-touch-icon.png" alt="Đang tải" /></div></div>'
 );
 
 fs.writeFileSync(file, html);
-console.log('Đã chèn apple-touch-icon + meta + spinner + preconnect vào dist/index.html.');
+console.log('Đã chèn apple-touch-icon + meta + logo chờ + preconnect vào dist/index.html.');
