@@ -15,6 +15,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import AvatarCropper from '../components/AvatarCropper';
 import { colors, font, radius, shadow, spacing } from '../constants/theme';
 import { signOut, updateMyProfile, uploadAvatar } from '../lib/api';
 import { useAuth } from '../lib/AuthContext';
@@ -31,8 +32,11 @@ export default function Profile() {
   const [avatar, setAvatar] = useState(me?.avatarUrl ?? '');
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
+  // Web: uri ảnh vừa chọn, chờ cắt trong AvatarCropper. Native cắt sẵn nên không dùng.
+  const [cropUri, setCropUri] = useState<string | null>(null);
 
   const email = session?.user.email ?? '';
+  const isWeb = Platform.OS === 'web';
 
   async function pickAvatar() {
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -43,16 +47,25 @@ export default function Profile() {
 
     const res = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'],
-      allowsEditing: true,
+      // Web bỏ qua allowsEditing -> tự cắt bằng AvatarCropper sau khi chọn.
+      allowsEditing: !isWeb,
       aspect: [1, 1],
       quality: 0.6, // nén cho nhẹ, ảnh đại diện không cần nét cao
-      base64: true, // lấy thẳng base64, khỏi phải đọc file
+      base64: !isWeb, // web khỏi cần base64, cropper tự tạo từ canvas
     });
-    if (res.canceled || !res.assets[0]?.base64) return;
+    if (res.canceled) return;
 
+    if (isWeb) {
+      setCropUri(res.assets[0].uri); // mở bảng cắt
+      return;
+    }
+    if (res.assets[0]?.base64) await doUpload(res.assets[0].base64);
+  }
+
+  async function doUpload(base64: string) {
     setUploading(true);
     try {
-      const url = await uploadAvatar(res.assets[0].base64);
+      const url = await uploadAvatar(base64);
       setAvatar(url);
       await refresh(); // để các màn khác thấy ảnh mới
     } catch (e: any) {
@@ -153,6 +166,18 @@ export default function Profile() {
           </Pressable>
         </View>
       </KeyboardAvoidingView>
+
+      {/* Web: bảng cắt ảnh (kéo + zoom). Native dùng bộ cắt sẵn nên không mở. */}
+      {cropUri && (
+        <AvatarCropper
+          uri={cropUri}
+          onCancel={() => setCropUri(null)}
+          onDone={async (base64) => {
+            setCropUri(null);
+            await doUpload(base64);
+          }}
+        />
+      )}
     </SafeAreaView>
   );
 }
