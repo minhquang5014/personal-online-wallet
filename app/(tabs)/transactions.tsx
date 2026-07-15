@@ -1,14 +1,14 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
-import { Alert, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Alert, FlatList, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Swipeable } from 'react-native-gesture-handler';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ALL_MONTHS, MonthDropdown } from '../../components/MonthDropdown';
 import { TransactionRow } from '../../components/TransactionRow';
 import { colors, font, radius, shadow, spacing } from '../../constants/theme';
 import { confirm } from '../../lib/confirm';
-import { dayHeaderParts, dayKey, formatVND } from '../../lib/format';
+import { dayHeaderParts, dayKey, formatVND, normalizeVN } from '../../lib/format';
 import { monthKeyOf } from '../../lib/selectors';
 import { TransactionWithCategory, TxType } from '../../lib/types';
 import { useWallet } from '../../lib/WalletContext';
@@ -38,7 +38,10 @@ interface DayGroup {
 export default function Transactions() {
   const router = useRouter();
   const [filter, setFilter] = useState<Filter>('all');
+  const [query, setQuery] = useState('');
   const { transactions: all, canEdit, removeTransaction } = useWallet();
+
+  const searching = query.trim().length > 0;
 
   // Chọn tháng để xem lịch sử. Mặc định tháng hiện tại.
   const currentMonth = monthKeyOf(new Date().toISOString());
@@ -69,9 +72,26 @@ export default function Transactions() {
   }
 
   const days = useMemo<DayGroup[]>(() => {
-    const inMonth =
-      selected === ALL_MONTHS ? all : all.filter((t) => monthKeyOf(t.date) === selected);
-    const filtered = filter === 'all' ? inMonth : inMonth.filter((t) => t.type === filter);
+    // Khi đang tìm kiếm: bỏ qua bộ lọc tháng, tìm trên tất cả giao dịch để không
+    // bỏ sót kết quả ở tháng khác. Khi không tìm: giới hạn theo tháng đang chọn.
+    const scope =
+      searching || selected === ALL_MONTHS
+        ? all
+        : all.filter((t) => monthKeyOf(t.date) === selected);
+    const byType = filter === 'all' ? scope : scope.filter((t) => t.type === filter);
+
+    const q = normalizeVN(query.trim());
+    const digits = query.replace(/\D/g, ''); // để khớp theo số tiền, vd "50000"
+    const filtered = !searching
+      ? byType
+      : byType.filter(
+          (t) =>
+            normalizeVN(t.category.name).includes(q) ||
+            normalizeVN(t.note).includes(q) ||
+            normalizeVN(t.creator.name).includes(q) ||
+            (digits.length > 0 && String(t.amount).includes(digits))
+        );
+
     const map = new Map<string, TransactionWithCategory[]>();
     for (const t of filtered) {
       const k = dayKey(t.date);
@@ -86,7 +106,12 @@ export default function Transactions() {
         items,
         total: items.reduce((s, t) => s + (t.type === 'income' ? t.amount : -t.amount), 0),
       }));
-  }, [filter, all, selected]);
+  }, [filter, all, selected, query, searching]);
+
+  const resultCount = useMemo(
+    () => days.reduce((n, g) => n + g.items.length, 0),
+    [days]
+  );
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
@@ -99,6 +124,26 @@ export default function Transactions() {
             <Ionicons name="chevron-down" size={14} color={colors.primary} />
           </View>
         </MonthDropdown>
+      </View>
+
+      {/* Ô tìm kiếm */}
+      <View style={styles.searchBox}>
+        <Ionicons name="search" size={18} color={colors.textMuted} />
+        <TextInput
+          style={styles.searchInput}
+          value={query}
+          onChangeText={setQuery}
+          placeholder="Tìm danh mục, ghi chú, người nhập, số tiền…"
+          placeholderTextColor={colors.textMuted}
+          returnKeyType="search"
+          autoCapitalize="none"
+          autoCorrect={false}
+        />
+        {searching && (
+          <Pressable onPress={() => setQuery('')} hitSlop={8}>
+            <Ionicons name="close-circle" size={18} color={colors.textMuted} />
+          </Pressable>
+        )}
       </View>
 
       {/* Bộ lọc */}
@@ -117,18 +162,31 @@ export default function Transactions() {
         })}
       </View>
 
+      {searching && (
+        <Text style={styles.searchHint}>
+          {resultCount > 0
+            ? `${resultCount} kết quả (tất cả các tháng)`
+            : 'Không tìm thấy'}
+        </Text>
+      )}
+
       <FlatList
         data={days}
         keyExtractor={(g) => g.key}
         contentContainerStyle={styles.list}
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
         renderItem={({ item: g }) => (
           <DayCard group={g} onPressTx={openTx} onDeleteTx={deleteTx} canEdit={canEdit} />
         )}
         ListEmptyComponent={
           <View style={styles.empty}>
             <Text style={styles.emptyText}>
-              {selected === ALL_MONTHS ? 'Chưa có giao dịch nào' : 'Chưa có giao dịch trong tháng này'}
+              {searching
+                ? `Không có giao dịch nào khớp "${query.trim()}"`
+                : selected === ALL_MONTHS
+                  ? 'Chưa có giao dịch nào'
+                  : 'Chưa có giao dịch trong tháng này'}
             </Text>
           </View>
         }
@@ -227,6 +285,32 @@ const styles = StyleSheet.create({
     borderRadius: radius.full,
   },
   monthText: { fontSize: font.size.xs, fontWeight: font.weight.semibold, color: colors.primary },
+
+  searchBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginHorizontal: spacing.lg,
+    marginBottom: spacing.md,
+    backgroundColor: colors.card,
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    ...shadow.card,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: font.size.md,
+    color: colors.text,
+    padding: 0, // bỏ padding mặc định của TextInput trên Android
+  },
+  searchHint: {
+    marginHorizontal: spacing.lg,
+    marginTop: spacing.md,
+    marginBottom: -spacing.sm,
+    fontSize: font.size.sm,
+    color: colors.textMuted,
+  },
 
   segment: {
     flexDirection: 'row',

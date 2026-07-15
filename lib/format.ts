@@ -1,3 +1,17 @@
+/**
+ * Chuẩn hoá chữ để tìm kiếm không phân biệt hoa/thường và DẤU tiếng Việt:
+ * "Cà Phê" -> "ca phe". Nhờ vậy gõ "ca phe" vẫn khớp "Cà phê".
+ * NFD tách dấu thanh/dấu mũ ra ký tự tổ hợp (U+0300–U+036F) để xoá; riêng
+ * đ/Đ không tách được nên thay tay.
+ */
+export function normalizeVN(s: string): string {
+  return s
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/đ/g, 'd');
+}
+
 /** Định dạng tiền VND, ví dụ 85000 -> "85.000 ₫". */
 export function formatVND(amount: number): string {
   return new Intl.NumberFormat('vi-VN', {
