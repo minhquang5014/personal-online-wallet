@@ -1,4 +1,5 @@
 import { createContext, ReactNode, useCallback, useContext, useEffect, useState } from 'react';
+import { AppState } from 'react-native';
 import * as api from './api';
 import { useAuth } from './AuthContext';
 import { usePrefs } from './PrefsContext';
@@ -116,6 +117,15 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const refresh = useCallback(async () => {
     if (wallet) await loadWallet(wallet);
   }, [wallet, loadWallet]);
+
+  // App không có realtime -> tự nạp lại dữ liệu mỗi khi quay lại foreground
+  // (mở lại tab web / mở lại app), để thấy giao dịch người khác vừa nhập.
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (s) => {
+      if (s === 'active') refresh().catch(() => {});
+    });
+    return () => sub.remove();
+  }, [refresh]);
 
   const selectWallet = useCallback(
     async (id: string) => {

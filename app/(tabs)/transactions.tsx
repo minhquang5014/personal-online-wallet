@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
-import { Alert, FlatList, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Alert, FlatList, Pressable, RefreshControl, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Swipeable } from 'react-native-gesture-handler';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ALL_MONTHS, MonthDropdown } from '../../components/MonthDropdown';
@@ -39,9 +39,19 @@ export default function Transactions() {
   const router = useRouter();
   const [filter, setFilter] = useState<Filter>('all');
   const [query, setQuery] = useState('');
-  const { transactions: all, canEdit, removeTransaction } = useWallet();
+  const { transactions: all, canEdit, removeTransaction, refresh } = useWallet();
 
   const searching = query.trim().length > 0;
+
+  const [refreshing, setRefreshing] = useState(false);
+  async function onRefresh() {
+    setRefreshing(true);
+    try {
+      await refresh();
+    } finally {
+      setRefreshing(false);
+    }
+  }
 
   // Chọn tháng để xem lịch sử. Mặc định tháng hiện tại.
   const currentMonth = monthKeyOf(new Date().toISOString());
@@ -176,6 +186,9 @@ export default function Transactions() {
         contentContainerStyle={styles.list}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} colors={[colors.primary]} />
+        }
         renderItem={({ item: g }) => (
           <DayCard group={g} onPressTx={openTx} onDeleteTx={deleteTx} canEdit={canEdit} />
         )}
