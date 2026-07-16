@@ -118,10 +118,19 @@ export default function Transactions() {
       }));
   }, [filter, all, selected, query, searching]);
 
-  const resultCount = useMemo(
-    () => days.reduce((n, g) => n + g.items.length, 0),
-    [days]
-  );
+  const result = useMemo(() => {
+    let count = 0;
+    let income = 0;
+    let expense = 0;
+    for (const g of days) {
+      for (const t of g.items) {
+        count += 1;
+        if (t.type === 'income') income += t.amount;
+        else expense += t.amount;
+      }
+    }
+    return { count, income, expense };
+  }, [days]);
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
@@ -172,13 +181,26 @@ export default function Transactions() {
         })}
       </View>
 
-      {searching && (
-        <Text style={styles.searchHint}>
-          {resultCount > 0
-            ? `${resultCount} kết quả (tất cả các tháng)`
-            : 'Không tìm thấy'}
-        </Text>
-      )}
+      {searching &&
+        (result.count > 0 ? (
+          <View style={styles.searchSummary}>
+            <Text style={styles.searchSummaryLabel}>{result.count} kết quả · tất cả các tháng</Text>
+            <View style={styles.searchTotals}>
+              {result.expense > 0 && (
+                <Text style={[styles.searchTotal, { color: colors.expense }]}>
+                  Chi {formatVND(result.expense)}
+                </Text>
+              )}
+              {result.income > 0 && (
+                <Text style={[styles.searchTotal, { color: colors.income }]}>
+                  Thu {formatVND(result.income)}
+                </Text>
+              )}
+            </View>
+          </View>
+        ) : (
+          <Text style={styles.searchHint}>Không tìm thấy</Text>
+        ))}
 
       <FlatList
         data={days}
@@ -324,6 +346,15 @@ const styles = StyleSheet.create({
     fontSize: font.size.sm,
     color: colors.textMuted,
   },
+  searchSummary: {
+    marginHorizontal: spacing.lg,
+    marginTop: spacing.md,
+    marginBottom: -spacing.sm,
+    gap: 2,
+  },
+  searchSummaryLabel: { fontSize: font.size.sm, color: colors.textMuted },
+  searchTotals: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.md },
+  searchTotal: { fontSize: font.size.sm, fontWeight: font.weight.bold },
 
   segment: {
     flexDirection: 'row',
