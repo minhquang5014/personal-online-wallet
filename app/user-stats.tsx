@@ -92,7 +92,12 @@ export default function UserStats() {
               <View style={styles.list}>
                 {stat.byCategory.map((c, i) => (
                   <View key={c.category.id}>
-                    <View style={styles.catRow}>
+                    <Pressable
+                      style={styles.catRow}
+                      onPress={() =>
+                        router.push(`/category-detail?categoryId=${c.category.id}&month=${month}&userId=${userId}`)
+                      }
+                    >
                       <View style={[styles.catIcon, { backgroundColor: c.category.color }]}>
                         <Ionicons name={c.category.icon as any} size={16} color={colors.white} />
                       </View>
@@ -101,7 +106,8 @@ export default function UserStats() {
                       </Text>
                       <Text style={styles.catPct}>{Math.round(c.ratio * 100)}%</Text>
                       <Text style={styles.catAmount}>{formatVND(c.total)}</Text>
-                    </View>
+                      <Ionicons name="chevron-forward" size={16} color={colors.textFaint} style={{ marginLeft: spacing.xs }} />
+                    </Pressable>
                     {i < stat.byCategory.length - 1 && <View style={styles.divider} />}
                   </View>
                 ))}

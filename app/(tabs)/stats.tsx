@@ -90,12 +90,16 @@ export default function Stats() {
           ) : (
             spend.map((s, i) => (
               <View key={s.category.id}>
-                <View style={styles.legendRow}>
+                <Pressable
+                  style={styles.legendRow}
+                  onPress={() => router.push(`/category-detail?categoryId=${s.category.id}&month=${selected}`)}
+                >
                   <View style={[styles.dot, { backgroundColor: s.category.color }]} />
                   <Text style={styles.legendName}>{s.category.name}</Text>
                   <Text style={styles.legendPct}>{Math.round(s.ratio * 100)}%</Text>
                   <Text style={styles.legendAmount}>{formatVND(s.total)}</Text>
-                </View>
+                  <Ionicons name="chevron-forward" size={16} color={colors.textFaint} style={{ marginLeft: spacing.xs }} />
+                </Pressable>
                 {i < spend.length - 1 && <View style={styles.divider} />}
               </View>
             ))

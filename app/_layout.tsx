@@ -108,6 +108,7 @@ function RootNavigator() {
       <Stack.Screen name="export" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
       <Stack.Screen name="wallet" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
       <Stack.Screen name="user-stats" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
+      <Stack.Screen name="category-detail" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
     </Stack>
   );
 }
