@@ -9,9 +9,10 @@ import { formatRelativeDate, formatVND } from '../lib/format';
 import { monthKeyOf } from '../lib/selectors';
 import { useWallet } from '../lib/WalletContext';
 
-/** '2026-07' -> 'Tháng 7, 2026'; ALL_MONTHS -> 'Tất cả'. */
-function monthTitle(key: string): string {
+/** Nhãn khoảng thời gian: '2026'->'Năm 2026', '2026-07'->'Tháng 7, 2026', ALL->'Tất cả'. */
+function periodTitle(key: string): string {
   if (!key || key === ALL_MONTHS) return 'Tất cả';
+  if (/^\d{4}$/.test(key)) return `Năm ${key}`;
   const [y, m] = key.split('-');
   return `Tháng ${Number(m)}, ${y}`;
 }
@@ -30,9 +31,16 @@ export default function CategoryDetail() {
   }>();
   const { transactions, categories, members } = useWallet();
 
-  const monthArg = month === ALL_MONTHS ? undefined : month;
   const category = categories.find((c) => c.id === categoryId);
   const member = userId ? members.find((m) => m.id === userId) : undefined;
+
+  // `month` có thể là tháng 'YYYY-MM', năm 'YYYY' (mở từ Tổng quan), hoặc ALL.
+  const isYear = /^\d{4}$/.test(month ?? '');
+  const inPeriod = (iso: string) => {
+    if (!month || month === ALL_MONTHS) return true;
+    const mk = monthKeyOf(iso);
+    return isYear ? mk.slice(0, 4) === month : mk === month;
+  };
 
   const list = useMemo(
     () =>
@@ -40,11 +48,12 @@ export default function CategoryDetail() {
         .filter(
           (t) =>
             t.categoryId === categoryId &&
-            (!monthArg || monthKeyOf(t.date) === monthArg) &&
+            inPeriod(t.date) &&
             (!userId || t.createdBy === userId)
         )
         .sort((a, b) => +new Date(b.date) - +new Date(a.date)),
-    [transactions, categoryId, monthArg, userId]
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [transactions, categoryId, month, userId]
   );
 
   const total = list.reduce((s, t) => s + t.amount, 0);
@@ -73,7 +82,7 @@ export default function CategoryDetail() {
                 {member ? ` · ${member.name}` : ''}
               </Text>
               <Text style={styles.summarySub}>
-                {monthTitle(month)} · {list.length} giao dịch
+                {periodTitle(month)} · {list.length} giao dịch
               </Text>
             </View>
             <Text

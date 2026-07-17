@@ -101,7 +101,10 @@ export default function Dashboard() {
           {topSpend.length === 0 && <Text style={styles.emptyText}>Chưa có chi tiêu nào</Text>}
           {topSpend.map((s, i) => (
             <View key={s.category.id}>
-              <View style={styles.spendRow}>
+              <Pressable
+                style={styles.spendRow}
+                onPress={() => router.push(`/category-detail?categoryId=${s.category.id}&month=${year}`)}
+              >
                 <View style={[styles.spendIcon, { backgroundColor: s.category.color + '22' }]}>
                   <Ionicons name={s.category.icon as any} size={18} color={s.category.color} />
                 </View>
@@ -116,7 +119,8 @@ export default function Dashboard() {
                     />
                   </View>
                 </View>
-              </View>
+                <Ionicons name="chevron-forward" size={16} color={colors.textFaint} style={{ marginLeft: spacing.sm }} />
+              </Pressable>
               {i < topSpend.length - 1 && <View style={styles.divider} />}
             </View>
           ))}
